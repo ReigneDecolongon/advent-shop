@@ -1,0 +1,98 @@
+# PRD: Shopping Website – Initial Release (Product Browsing & Cart)
+
+Nov 3, 2026 · @Reigne
+
+## Overview
+
+Release 1 delivers the smallest shoppable loop: a visitor can browse a product catalog, open a product, and build a cart. Checkout, payments, user accounts and admin tools are deferred to later increments.
+
+The release also sets up the foundation later features build on: repo structure, a Node API, a React app shell and the Tailwind design basics. Three developers work on it in parallel.
+
+## Goals, non-goals and success metrics
+
+**Goals**
+
+- A visitor can find a product and add it to a cart in under 1 minute.
+- The cart total always matches server-side prices.
+- The codebase is ready for checkout to be added in Release 2 without rework.
+
+**Non-goals (Release 1)**
+
+- Checkout, payments, shipping and tax
+- User accounts, login and order history
+- Admin or inventory management UI
+- Reviews, wishlists, recommendations
+
+**Success metrics**
+
+- Catalog page loads in under 2 s on a mid-range phone over 4G (Lighthouse performance score of 80 or higher).
+- All acceptance criteria below pass in QA with no open blocker bugs.
+- API p95 response time under 200 ms for catalog and product endpoints at 50 concurrent users.
+
+## Requirements
+
+Six functional requirements cover the release. Each has a testable acceptance criterion.
+
+| ID | Requirement | Acceptance criteria |
+| --- | --- | --- |
+| FR-1 | Product listing page shows a grid of products (image, name, price). | 12 products per page; pagination works; grid is 1 column on mobile, 2 on tablet, 4 on desktop. |
+| FR-2 | Visitor can search by name and filter by category. | Search matches name case-insensitively; filter and search combine; empty result shows a clear message. |
+| FR-3 | Product detail page shows image, name, description, price and stock status. | Reachable at /products/:id; unknown id shows a 404 page; out-of-stock items disable Add to cart. |
+| FR-4 | Visitor can add a product to the cart from the listing or detail page. | Cart icon count updates immediately; adding the same product increases its quantity. |
+| FR-5 | Cart page lets the visitor change quantity (1 to 10) and remove items. | Line totals and subtotal update instantly; empty cart shows a link back to the catalog. |
+| FR-6 | Cart survives a page refresh and browser restart. | Cart is stored in localStorage; prices are re-validated by the API on cart page load and stale prices are corrected with a notice. |
+
+**Non-functional requirements**
+
+- Responsive from 360 px wide and up; keyboard navigable; images have alt text (WCAG 2.1 AA basics).
+- Server-side input validation on every endpoint; no secrets in the client bundle.
+- Basic automated tests: API endpoints (Node built-in test runner) and cart logic (unit tests).
+
+## Technical approach
+
+A React single-page app talks to a small vanilla Node.js JSON API. The cart lives in the browser; the API is the source of truth for products and prices.
+
+- **Frontend:** React with React Router, Vite for build, Tailwind CSS for styling. Cart state in a React context backed by localStorage.
+- **Backend:** Node.js `http` module only (no framework), a small hand-written router, JSON responses, CORS limited to the frontend origin.
+- **Data:** products seeded from a `products.json` file (about 30 items) loaded into memory at startup. No database in Release 1.
+- **Repo:** one repo with `/client` and `/server` folders; `npm run dev` starts both.
+
+**API endpoints**
+
+| Method and path | Purpose | Notes |
+| --- | --- | --- |
+| GET /api/products | List products | Query: `q`, `category`, `page`, `limit` (default 12, max 48). Returns items and total count. |
+| GET /api/products/:id | Product detail | 404 with JSON error if not found. |
+| GET /api/categories | List categories | Used by the filter dropdown. |
+| POST /api/cart/validate | Re-price a cart | Body: list of `{id, qty}`. Returns current price, stock and line totals; flags unknown or unavailable items. |
+
+**Product shape:** `id`, `name`, `description`, `price` (integer, centavos or cents, never floats), `currency`, `category`, `imageUrl`, `stock`.
+
+## Work split, order and risks
+
+The three developers own separate areas so they can work in parallel once the API contract above is agreed.
+
+| Developer | Owns | Requirements |
+| --- | --- | --- |
+| Dev A (backend) | Node server, router, seed data, validation, API tests | API for FR-1, FR-2, FR-3, FR-6 |
+| Dev B (catalog UI) | Listing page, search and filters, product detail page, pagination | FR-1, FR-2, FR-3 |
+| Dev C (cart and shell) | Repo setup, Tailwind config, layout and routing, cart context, cart page, cart tests | FR-4, FR-5, FR-6 |
+
+**Order of work**
+
+1. Day 1: Dev C scaffolds the repo, Tailwind and routing; Dev A publishes the API contract with stub responses.
+2. Dev A builds endpoints against the contract while Dev B and Dev C build UI on the stubs.
+3. Integrate the real API, then run cross-review of each other's pull requests (every PR needs one reviewer).
+4. QA pass against the acceptance criteria, fix bugs, tag Release 1.
+
+**Risks**
+
+- Contract drift between API and UI: keep the endpoint table above as the single reference and change it by PR only.
+- No database means data resets on restart: acceptable for Release 1, revisit before checkout.
+- Cart prices going stale: handled by re-validation on cart load (FR-6).
+
+**Open questions**
+
+- Which product categories and how many items ship at launch?
+- Single currency only, and which one?
+- Is a database (PostgreSQL or SQLite) wanted in Release 2, or does the JSON file stay?
